@@ -5,7 +5,9 @@ import './index.css'
 import App from './App.jsx'
 
 // 配置axios的baseURL
-axios.defaults.baseURL = 'http://localhost:3000';
+axios.defaults.baseURL = process.env.NODE_ENV === 'production' 
+  ? window.location.origin 
+  : 'http://localhost:3000';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

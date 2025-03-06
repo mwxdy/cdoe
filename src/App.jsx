@@ -32,12 +32,59 @@ function App() {
         const response = await axios.get(`/api/proxy-download?url=${encodeURIComponent(wordUrl)}`, {
           responseType: 'blob'
         });
-        const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        
+        // 获取文件名
+        let fileName = 'document.docx';
+        const xFilename = response.headers['x-filename'];
+        if (xFilename) {
+          fileName = xFilename;
+        } else {
+          const contentDisposition = response.headers['content-disposition'];
+          if (contentDisposition) {
+            const matches = /filename[^;=\n]*=(([\'"]).+?\2|[^;\n]*)/i.exec(contentDisposition);
+            if (matches && matches[1]) {
+              fileName = matches[1].replace(/[\'"]*/, '');
+            }
+            
+            // 尝试提取UTF-8编码的文件名 (filename*=UTF-8''encoded-filename)
+            if (!fileName.includes('.')) {
+              const filenameStarRegex = /filename\*=([^']*)'([^']*)'([^;\n]*)/i;
+              const starMatches = filenameStarRegex.exec(contentDisposition);
+              if (starMatches && starMatches[3]) {
+                try {
+                  fileName = decodeURIComponent(starMatches[3]);
+                } catch (e) {
+                  console.error('解码文件名失败:', e);
+                }
+              }
+            }
+          }
+          
+          // 如果仍然没有获取到有效文件名，从URL中提取
+          if (!fileName.includes('.')) {
+            try {
+              const urlObj = new URL(wordUrl);
+              const pathSegments = urlObj.pathname.split('/');
+              const urlFileName = pathSegments[pathSegments.length - 1];
+              if (urlFileName && urlFileName.includes('.')) {
+                fileName = urlFileName;
+              }
+            } catch (e) {
+              console.error('URL解析失败:', e);
+            }
+          }
+        }
+        
+        // 创建下载链接
+        const blob = new Blob([response.data], { type: response.headers['content-type'] });
+        const downloadUrl = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = window.URL.createObjectURL(blob);
-        link.download = '文章内容.docx';
+        link.href = downloadUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
         link.click();
-        window.URL.revokeObjectURL(link.href);
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
       }
 
       // 下载图片
@@ -45,12 +92,75 @@ function App() {
         const response = await axios.get(`/api/proxy-download?url=${encodeURIComponent(imageLinks[i])}`, {
           responseType: 'blob'
         });
-        const blob = new Blob([response.data], { type: 'application/zip' });
+        
+        // 获取文件名
+        let fileName = `image_${i+1}.png`;
+        const xFilename = response.headers['x-filename'];
+        if (xFilename) {
+          fileName = xFilename;
+        } else {
+          const contentDisposition = response.headers['content-disposition'];
+          if (contentDisposition) {
+            const matches = /filename[^;=\n]*=(([\'"]).+?\2|[^;\n]*)/i.exec(contentDisposition);
+            if (matches && matches[1]) {
+              fileName = matches[1].replace(/[\'"]*/, '');
+            }
+            
+            // 尝试提取UTF-8编码的文件名 (filename*=UTF-8''encoded-filename)
+            if (!fileName.includes('.')) {
+              const filenameStarRegex = /filename\*=([^']*)'([^']*)'([^;\n]*)/i;
+              const starMatches = filenameStarRegex.exec(contentDisposition);
+              if (starMatches && starMatches[3]) {
+                try {
+                  fileName = decodeURIComponent(starMatches[3]);
+                } catch (e) {
+                  console.error('解码文件名失败:', e);
+                }
+              }
+            }
+          }
+          
+          // 如果仍然没有获取到有效文件名，从URL中提取
+          if (!fileName.includes('.')) {
+            try {
+              const urlObj = new URL(imageLinks[i]);
+              const pathSegments = urlObj.pathname.split('/');
+              const urlFileName = pathSegments[pathSegments.length - 1];
+              if (urlFileName && urlFileName.includes('.')) {
+                fileName = urlFileName;
+              } else {
+                // 尝试从URL中的关键词识别图片类型
+                if (imageLinks[i].includes('png')) {
+                  fileName = `image_${i+1}.png`;
+                } else if (imageLinks[i].includes('jpg') || imageLinks[i].includes('jpeg')) {
+                  fileName = `image_${i+1}.jpg`;
+                } else if (imageLinks[i].includes('gif')) {
+                  fileName = `image_${i+1}.gif`;
+                } else {
+                  // 从Content-Type中获取
+                  const contentType = response.headers['content-type'];
+                  if (contentType && contentType.startsWith('image/')) {
+                    const ext = contentType.split('/').pop();
+                    fileName = `image_${i+1}.${ext}`;
+                  }
+                }
+              }
+            } catch (e) {
+              console.error('URL解析失败:', e);
+            }
+          }
+        }
+        
+        // 创建下载链接
+        const blob = new Blob([response.data], { type: response.headers['content-type'] });
+        const downloadUrl = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = window.URL.createObjectURL(blob);
-        link.download = `图片${i + 1}.zip`;
+        link.href = downloadUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
         link.click();
-        window.URL.revokeObjectURL(link.href);
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
       }
 
       message.success('文件下载完成');
