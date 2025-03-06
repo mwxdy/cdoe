@@ -26,6 +26,11 @@ app.get('/api/proxy-download', async (req, res) => {
       method: 'get',
       url: decodeURIComponent(url),
       responseType: 'stream',
+      timeout: 30000,
+      maxContentLength: 50 * 1024 * 1024, // 50MB
+      validateStatus: function (status) {
+        return status >= 200 && status < 300;
+      }
     });
 
     // 设置响应头
@@ -36,12 +41,15 @@ app.get('/api/proxy-download', async (req, res) => {
     response.data.pipe(res);
   } catch (error) {
     console.error('代理下载失败:', error);
-    res.status(500).json({ error: '下载失败' });
+    const errorMessage = error.response
+      ? `下载失败: HTTP ${error.response.status} - ${error.response.statusText}`
+      : error.code === 'ECONNABORTED'
+      ? '下载超时'
+      : `下载失败: ${error.message}`;
+    res.status(500).json({ error: errorMessage });
   }
 });
 
-// 提供静态文件
-app.use(express.static(path.join(__dirname, 'dist')));
 
 // Coze API路由
 app.post('/api/coze/session', async (req, res) => {
@@ -87,11 +95,6 @@ app.get('/api/coze/result/:executeId', async (req, res) => {
     console.error('Get result error:', error);
     res.status(500).json({ error: 'Failed to get result' });
   }
-});
-
-// 所有其他请求返回React应用
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(PORT, () => {
