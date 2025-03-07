@@ -24,7 +24,7 @@ function App() {
       const downloadUrl = linkMatch ? linkMatch[1].trim() : null;
 
       if (downloadUrl) {
-        const response = await axios.get(`http://localhost:3000/proxy-download?url=${encodeURIComponent(downloadUrl)}`, {
+        const response = await axios.get(`/api/proxy-download?url=${encodeURIComponent(downloadUrl)}`, {
           responseType: 'blob'
         });
         
