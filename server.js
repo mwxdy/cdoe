@@ -3,6 +3,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 import axios from 'axios';
+import fs from 'fs';
+import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,7 +30,7 @@ app.get('/api/proxy-download', async (req, res) => {
     const response = await axios({
       method: 'get',
       url: decodeURIComponent(url),
-      responseType: 'stream',
+      responseType: 'arraybuffer',
       timeout: 30000,
       maxContentLength: 50 * 1024 * 1024, // 50MB
       validateStatus: function (status) {
@@ -61,7 +63,7 @@ app.get('/api/proxy-download', async (req, res) => {
       const contentDisposition = response.headers['content-disposition'];
       if (contentDisposition) {
         // 尝试提取标准文件名
-        const matches = /filename[^;=\n]*=((['"]).+?\2|[^;\n]*)/i.exec(contentDisposition);
+        const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i.exec(contentDisposition);
         if (matches && matches[1]) {
           fileName = matches[1].replace(/['"]*/g, '');
         }
@@ -142,8 +144,8 @@ app.get('/api/proxy-download', async (req, res) => {
     // 添加自定义头，确保文件名和扩展名能被前端正确识别
     res.setHeader('X-Filename', fileName);
 
-    // 将文件流传输到客户端
-    response.data.pipe(res);
+    // 将文件内容发送到客户端
+    res.send(response.data);
   } catch (error) {
     console.error('代理下载失败:', error);
     const errorMessage = error.response
@@ -200,6 +202,12 @@ app.get('/api/coze/result/:executeId', async (req, res) => {
     console.error('Get result error:', error);
     res.status(500).json({ error: 'Failed to get result' });
   }
+});
+
+// 确保所有其他路由都返回index.html（SPA应用需要）
+app.get('*', (req, res) => {
+  // 对于非API请求，返回前端应用
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(PORT, () => {
