@@ -14,11 +14,6 @@ axios.interceptors.request.use(config => {
     // 已经是相对路径，保持不变
     return config;
   }
-  
-  // 确保API请求路径正确，特别是在生产环境中
-  if (config.url && !config.url.startsWith('/') && !config.url.startsWith('http')) {
-    config.url = `/${config.url}`;
-  }
   return config;
 });
 

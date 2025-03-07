@@ -30,11 +30,15 @@ app.get('/api/proxy-download', async (req, res) => {
     const response = await axios({
       method: 'get',
       url: decodeURIComponent(url),
-      responseType: 'arraybuffer',
-      timeout: 30000,
-      maxContentLength: 50 * 1024 * 1024, // 50MB
+      responseType: 'stream',
+      timeout: 60000,
+      maxContentLength: 100 * 1024 * 1024, // 100MB
       validateStatus: function (status) {
         return status >= 200 && status < 300;
+      },
+      headers: {
+        'Accept': '*/*',
+        'User-Agent': 'Mozilla/5.0'
       }
     });
 
@@ -136,16 +140,16 @@ app.get('/api/proxy-download', async (req, res) => {
     let contentType = mimeTypes[fileExtension] || response.headers['content-type'] || 'application/octet-stream';
     res.setHeader('Content-Type', contentType);
 
-    // 设置Content-Disposition，确保文件名正确编码
-    // 同时提供标准filename和扩展的filename*格式，以提高兼容性
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+    // 设置Content-Disposition，强制浏览器直接下载
+    // 添加noopen参数以阻止浏览器询问打开方式
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}; noopen`);
     res.setHeader('Cache-Control', 'no-cache');
     
     // 添加自定义头，确保文件名和扩展名能被前端正确识别
     res.setHeader('X-Filename', fileName);
 
-    // 将文件内容发送到客户端
-    res.send(response.data);
+    // 将文件流传输到客户端
+    response.data.pipe(res);
   } catch (error) {
     console.error('代理下载失败:', error);
     const errorMessage = error.response
