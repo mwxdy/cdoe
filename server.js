@@ -17,6 +17,34 @@ app.use(express.json());
 // 静态文件服务
 app.use(express.static(path.join(__dirname, 'dist')));
 
+// 添加在文件开头的全局变量部分
+const systemState = {
+  isProcessing: false,
+  lastRequestTime: null,
+  executeId: null
+};
+
+// 添加一个检查状态的端点
+app.get('/api/system/status', (req, res) => {
+  // 如果上次请求超过5分钟，自动释放状态
+  if (systemState.isProcessing && systemState.lastRequestTime) {
+    const fiveMinutes = 5 * 60 * 1000;
+    if (Date.now() - systemState.lastRequestTime > fiveMinutes) {
+      systemState.isProcessing = false;
+      systemState.executeId = null;
+    }
+  }
+  res.json({ isProcessing: systemState.isProcessing });
+});
+
+// 添加释放系统状态的端点
+app.post('/api/system/release', (req, res) => {
+  systemState.isProcessing = false;
+  systemState.executeId = null;
+  systemState.lastRequestTime = null;
+  res.json({ success: true });
+});
+
 // 代理下载请求
 app.get('/api/proxy-download', async (req, res) => {
   try {
@@ -174,6 +202,18 @@ import { API_CONFIG } from './src/config/api.config.js';
 
 app.post('/api/coze/execute', async (req, res) => {
   try {
+    // 检查系统是否正在处理其他请求
+    if (systemState.isProcessing) {
+      return res.status(423).json({ 
+        error: 'System is busy', 
+        message: '系统正在处理其他用户的请求，请稍后再试'
+      });
+    }
+
+    // 设置系统状态为正在处理
+    systemState.isProcessing = true;
+    systemState.lastRequestTime = Date.now();
+
     // 转发请求到Coze API
     const response = await axios.post(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.WORKFLOW_RUN}`, {
       workflow_id: API_CONFIG.WORKFLOW_IDS.COMMAND,
@@ -185,8 +225,15 @@ app.post('/api/coze/execute', async (req, res) => {
         'Content-Type': 'application/json'
       }
     });
+
+    // 保存executeId用于状态追踪
+    systemState.executeId = response.data.execute_id;
+    
     res.json(response.data);
   } catch (error) {
+    // 发生错误时释放系统状态
+    systemState.isProcessing = false;
+    systemState.executeId = null;
     console.error('Execute command error:', error);
     res.status(500).json({ error: 'Failed to execute command' });
   }
@@ -215,15 +262,27 @@ app.post('/api/coze/push/execute', async (req, res) => {
 
 app.get('/api/coze/result/:executeId', async (req, res) => {
   try {
-    // 转发请求到Coze API
     const url = `${API_CONFIG.BASE_URL}/workflows/${API_CONFIG.WORKFLOW_IDS.COMMAND}/run_histories/${req.params.executeId}`;
     const response = await axios.get(url, {
       headers: {
         'Authorization': `Bearer ${API_CONFIG.API_TOKEN}`
       }
     });
+
+    // 如果获取到成功结果，释放系统状态
+    if (response.data.code === 0 && 
+        response.data.data && 
+        response.data.data[0] && 
+        response.data.data[0].execute_status === 'Success') {
+      systemState.isProcessing = false;
+      systemState.executeId = null;
+    }
+
     res.json(response.data);
   } catch (error) {
+    // 发生错误时也释放系统状态
+    systemState.isProcessing = false;
+    systemState.executeId = null;
     console.error('Get result error:', error);
     res.status(500).json({ error: 'Failed to get result' });
   }
@@ -238,3 +297,4 @@ app.get('*', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+

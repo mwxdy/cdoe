@@ -3,7 +3,7 @@ import { Button, message } from 'antd';
 import QuickGenPanel from './components/QuickGenPanel';
 import ResultArea from './components/ResultArea';
 import PublishDrawer from './components/PublishDrawer';
-import { executeCommand } from './services/cozeApi';
+import { checkSystemStatus, executeCommand } from './services/cozeApi';
 import axios from 'axios';
 import './App.css';
 
@@ -141,15 +141,39 @@ function App() {
       return;
     }
 
-    setLoading(true);
-    setResult('生成中，请耐心等待5分钟...');
     try {
+      // 先检查系统状态
+      const isProcessing = await checkSystemStatus();
+      if (isProcessing) {
+        message.warning({
+          content: '系统正在处理其他用户的请求，请稍后再试',
+          duration: 5,
+          style: {
+            marginTop: '80px'
+          }
+        });
+        return;
+      }
+
+      setLoading(true);
+      setResult('生成中，请耐心等待5分钟...');
+      
       const response = await executeCommand(settings.command, settings);
       setResult(response.content);
       // 自动下载生成的文件
       await downloadFiles(response.content);
     } catch (error) {
-      message.error('生成失败，请重试');
+      if (error.message === '系统正在处理其他用户的请求，请稍后再试') {
+        message.warning({
+          content: error.message,
+          duration: 5,
+          style: {
+            marginTop: '80px'
+          }
+        });
+      } else {
+        message.error('生成失败，请重试');
+      }
       console.error(error);
     } finally {
       setLoading(false);
@@ -182,3 +206,6 @@ function App() {
 }
 
 export default App;
+
+
+
