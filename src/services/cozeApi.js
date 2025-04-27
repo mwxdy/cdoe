@@ -11,21 +11,28 @@ export const initSession = async () => {
   }
 };
 
-// 添加系统状态检查函数
+// 修改状态检查函数
 export const checkSystemStatus = async () => {
   try {
     const response = await axios.get('/api/system/status');
-    return response.data.isProcessing;
+    console.log('系统状态:', response.data);
+    return response.data;  // 返回完整的状态对象
   } catch (error) {
     console.error('检查系统状态失败:', error);
-    throw error;
+    // 如果检查失败，返回一个默认状态
+    return { isProcessing: false, lastRequestTime: null };
   }
 };
 
-// 添加释放状态的函数
+// 修改释放状态函数
 const releaseSystemState = async () => {
   try {
-    await axios.post('/api/system/release');
+    const response = await axios.post('/api/system/release');
+    console.log('释放状态结果:', response.data);
+    // 确保状态被完全释放
+    if (!response.data.success) {
+      console.error('释放状态失败');
+    }
   } catch (error) {
     console.error('释放系统状态失败:', error);
   }
@@ -34,8 +41,8 @@ const releaseSystemState = async () => {
 export const executeCommand = async (command, options) => {
   try {
     // 先检查系统状态
-    const isProcessing = await checkSystemStatus();
-    if (isProcessing) {
+    const status = await checkSystemStatus();
+    if (status.isProcessing) {  // 修改这里，使用状态对象
       throw new Error('系统正在处理其他用户的请求，请稍后再试');
     }
 
@@ -54,9 +61,13 @@ export const executeCommand = async (command, options) => {
     } else {
       const errorMsg = response.data.msg || '执行命令失败';
       console.error('API错误:', errorMsg);
+      // 确保在错误时释放状态
+      await releaseSystemState();
       throw new Error(errorMsg);
     }
   } catch (error) {
+    // 确保在任何错误情况下都释放状态
+    await releaseSystemState();
     console.error('执行命令失败:', error);
     throw error;
   }

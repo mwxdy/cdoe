@@ -143,8 +143,8 @@ function App() {
 
     try {
       // 先检查系统状态
-      const isProcessing = await checkSystemStatus();
-      if (isProcessing) {
+      const statusResponse = await checkSystemStatus();
+      if (statusResponse.isProcessing) {  // 修改这里，直接使用返回的对象
         message.warning({
           content: '系统正在处理其他用户的请求，请稍后再试',
           duration: 5,

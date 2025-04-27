@@ -17,32 +17,43 @@ app.use(express.json());
 // 静态文件服务
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// 添加在文件开头的全局变量部分
+// 在文件开头定义系统状态
 const systemState = {
   isProcessing: false,
-  lastRequestTime: null,
-  executeId: null
+  executeId: null,
+  lastRequestTime: null
 };
 
 // 添加一个检查状态的端点
 app.get('/api/system/status', (req, res) => {
-  // 如果上次请求超过5分钟，自动释放状态
+  // 如果上次请求超过5分钟，强制释放状态
   if (systemState.isProcessing && systemState.lastRequestTime) {
     const fiveMinutes = 5 * 60 * 1000;
     if (Date.now() - systemState.lastRequestTime > fiveMinutes) {
       systemState.isProcessing = false;
       systemState.executeId = null;
+      systemState.lastRequestTime = null;
     }
   }
-  res.json({ isProcessing: systemState.isProcessing });
+  
+  // 返回当前状态
+  res.json({ 
+    isProcessing: systemState.isProcessing,
+    lastRequestTime: systemState.lastRequestTime 
+  });
 });
 
 // 添加释放系统状态的端点
 app.post('/api/system/release', (req, res) => {
+  // 完全清除所有状态
   systemState.isProcessing = false;
   systemState.executeId = null;
   systemState.lastRequestTime = null;
-  res.json({ success: true });
+  
+  res.json({ 
+    success: true,
+    message: '状态已释放，可以开始新的请求'
+  });
 });
 
 // 代理下载请求
@@ -210,7 +221,12 @@ app.post('/api/coze/execute', async (req, res) => {
       });
     }
 
-    // 设置系统状态为正在处理
+    // 重要：设置系统状态为正在处理前，先确保之前的状态已完全清除
+    systemState.isProcessing = false;
+    systemState.executeId = null;
+    systemState.lastRequestTime = null;
+
+    // 然后再设置新的状态
     systemState.isProcessing = true;
     systemState.lastRequestTime = Date.now();
 
@@ -234,6 +250,7 @@ app.post('/api/coze/execute', async (req, res) => {
     // 发生错误时释放系统状态
     systemState.isProcessing = false;
     systemState.executeId = null;
+    systemState.lastRequestTime = null;
     console.error('Execute command error:', error);
     res.status(500).json({ error: 'Failed to execute command' });
   }
