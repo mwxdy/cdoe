@@ -1,16 +1,26 @@
 import React, { useState } from 'react';
 import { Button, message } from 'antd';
-import axios from 'axios';
 import QuickGenPanel from './components/QuickGenPanel';
 import ResultArea from './components/ResultArea';
+import PublishDrawer from './components/PublishDrawer';
 import { executeCommand } from './services/cozeApi';
+import axios from 'axios';
 import './App.css';
+
+// 配置message全局样式
+message.config({
+  top: 80,
+  duration: 3,
+  maxCount: 3,
+  rtl: false,
+});
 
 function App() {
   const [settings, setSettings] = useState({ style: '', command: '' });
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState('');
   const [downloading, setDownloading] = useState(false);
+  const [drawerVisible, setDrawerVisible] = useState(false);
 
   const handleSettingsChange = (newSettings) => {
     setSettings({ ...settings, ...newSettings });
@@ -132,7 +142,7 @@ function App() {
     }
 
     setLoading(true);
-    setResult('生成中，请耐心等待20分钟...');
+    setResult('生成中，请耐心等待5分钟...');
     try {
       const response = await executeCommand(settings.command, settings);
       setResult(response.content);
@@ -149,15 +159,24 @@ function App() {
   return (
     <div className="app-container">
       <QuickGenPanel onSettingsChange={handleSettingsChange} />
-      <Button 
-        type="primary" 
-        onClick={handleGenerate} 
-        loading={loading || downloading}
-        style={{ marginBottom: 20, width: '100%' }}
-      >
-        {downloading ? '下载文件中...' : '生成文章'}
-      </Button>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: 20 }}>
+        <Button 
+          type="primary" 
+          onClick={handleGenerate} 
+          loading={loading || downloading}
+          style={{ flex: 1 }}
+        >
+          {downloading ? '下载文件中...' : '生成文章'}
+        </Button>
+        <Button onClick={() => setDrawerVisible(true)} type="default">
+          一键发布到公众号
+        </Button>
+      </div>
       <ResultArea content={result} loading={loading} />
+      <PublishDrawer
+        visible={drawerVisible}
+        onClose={() => setDrawerVisible(false)}
+      />
     </div>
   );
 }

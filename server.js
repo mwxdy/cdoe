@@ -3,8 +3,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 import axios from 'axios';
-import fs from 'fs';
-import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -160,8 +158,6 @@ app.get('/api/proxy-download', async (req, res) => {
     res.status(500).json({ error: errorMessage });
   }
 });
-
-
 // Coze API路由
 app.post('/api/coze/session', async (req, res) => {
   try {
@@ -173,16 +169,19 @@ app.post('/api/coze/session', async (req, res) => {
   }
 });
 
+// 处理普通命令执行
+import { API_CONFIG } from './src/config/api.config.js';
+
 app.post('/api/coze/execute', async (req, res) => {
   try {
     // 转发请求到Coze API
-    const response = await axios.post('https://api.coze.cn/v1/workflow/run', {
-      workflow_id: "7472927343000322086",
+    const response = await axios.post(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.WORKFLOW_RUN}`, {
+      workflow_id: API_CONFIG.WORKFLOW_IDS.COMMAND,
       parameters: req.body.parameters,
       is_async: true
     }, {
       headers: {
-        'Authorization': 'Bearer pat_4FSfM58XkK4D0aavf5wFlsl60ZUzoCi1oO1wBBu8PSY7YOQiAZOSfUP6tNlRnM0m',
+        'Authorization': `Bearer ${API_CONFIG.API_TOKEN}`,
         'Content-Type': 'application/json'
       }
     });
@@ -193,12 +192,34 @@ app.post('/api/coze/execute', async (req, res) => {
   }
 });
 
+// 处理公众号文章生成
+app.post('/api/coze/push/execute', async (req, res) => {
+  try {
+    // 转发请求到Coze API
+    const response = await axios.post(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.WORKFLOW_RUN}`, {
+      workflow_id: API_CONFIG.WORKFLOW_IDS.PUSH_ARTICLE,
+      parameters: req.body.parameters,
+      is_async: true
+    }, {
+      headers: {
+        'Authorization': `Bearer ${API_CONFIG.API_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Execute push article generation error:', error);
+    res.status(500).json({ error: 'Failed to generate article' });
+  }
+});
+
 app.get('/api/coze/result/:executeId', async (req, res) => {
   try {
     // 转发请求到Coze API
-    const response = await axios.get(`https://api.coze.cn/v1/workflows/7472927343000322086/run_histories/${req.params.executeId}`, {
+    const url = `${API_CONFIG.BASE_URL}/workflows/${API_CONFIG.WORKFLOW_IDS.COMMAND}/run_histories/${req.params.executeId}`;
+    const response = await axios.get(url, {
       headers: {
-        'Authorization': 'Bearer pat_4FSfM58XkK4D0aavf5wFlsl60ZUzoCi1oO1wBBu8PSY7YOQiAZOSfUP6tNlRnM0m'
+        'Authorization': `Bearer ${API_CONFIG.API_TOKEN}`
       }
     });
     res.json(response.data);

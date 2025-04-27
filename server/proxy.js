@@ -1,12 +1,29 @@
 import express from 'express';
 import axios from 'axios';
 import cors from 'cors';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 const port = 3000;
 
-// 启用CORS
 app.use(cors());
+
+// 添加新的路由处理 Coze API 请求
+app.post('/api/coze/execute', async (req, res) => {
+  try {
+    const response = await axios.post('https://api.coze.cn/v1/workflow/run', req.body, {
+      headers: {
+        'Authorization': `Bearer ${process.env.COZE_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    res.json(response.data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // 代理下载请求
 app.get('/proxy-download', async (req, res) => {

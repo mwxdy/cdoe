@@ -1,6 +1,5 @@
 import axios from 'axios';
-
-const API_BASE_URL = 'https://api.coze.cn/v1/workflow/run';
+import { API_CONFIG, replaceUrlParams } from '../config/api.config';
 
 export const initSession = async () => {
   try {
@@ -14,19 +13,13 @@ export const initSession = async () => {
 
 export const executeCommand = async (command, options) => {
   try {
-    const response = await axios.post(API_BASE_URL, {
-      workflow_id: "7472927343000322086",
+    const response = await axios.post('/api/coze/execute', {
+      workflow_id: API_CONFIG.WORKFLOW_IDS.COMMAND,
       parameters: {
         input: [command]
       },
       is_async: true
-    }, {
-      headers: {
-        'Authorization': 'Bearer pat_4FSfM58XkK4D0aavf5wFlsl60ZUzoCi1oO1wBBu8PSY7YOQiAZOSfUP6tNlRnM0m',
-        'Content-Type': 'application/json'
-      }
-    });
-    
+    }); 
     // 检查响应状态
     if (response.data.code === 0) {
       // 存储execute_id用于后续获取结果
@@ -35,24 +28,30 @@ export const executeCommand = async (command, options) => {
       // 轮询获取结果
       return await pollResult(executeId);
     } else {
-      throw new Error(response.data.msg || '执行命令失败');
+      const errorMsg = response.data.msg || '执行命令失败';
+      console.error('API错误:', errorMsg);
+      throw new Error(errorMsg);
     }
+    
   } catch (error) {
     console.error('执行命令失败:', error);
     throw error;
   }
 };
-
-const pollResult = async (executeId, maxAttempts = 25, interval = 50000) => {
+const pollResult = async (executeId, maxAttempts = API_CONFIG.POLLING.MAX_ATTEMPTS, interval = API_CONFIG.POLLING.INTERVAL) => {
   let attempts = 0;
   
   console.log('开始轮询结果，execute_id:', executeId);
   
   while (attempts < maxAttempts) {
     try {
-      const response = await axios.get(`https://api.coze.cn/v1/workflows/7472927343000322086/run_histories/${executeId}`, {
+      const url = replaceUrlParams(API_CONFIG.BASE_URL + API_CONFIG.ENDPOINTS.RUN_HISTORIES, {
+        workflowId: API_CONFIG.WORKFLOW_IDS.COMMAND,
+        executeId
+      });
+      const response = await axios.get(url, {
         headers: {
-          'Authorization': 'Bearer pat_4FSfM58XkK4D0aavf5wFlsl60ZUzoCi1oO1wBBu8PSY7YOQiAZOSfUP6tNlRnM0m'
+          'Authorization': `Bearer ${API_CONFIG.API_TOKEN}`
         }
       });
       
@@ -60,6 +59,7 @@ const pollResult = async (executeId, maxAttempts = 25, interval = 50000) => {
         const result = response.data.data[0];
         const status = result.execute_status;
         console.log(`轮询进度: 第${attempts + 1}次尝试, 状态: ${status}`);
+        console.log(`调试URL: https://www.coze.cn/work_flow?execute_id=${executeId}&space_id=7408183695611527187&workflow_id=${API_CONFIG.WORKFLOW_IDS.COMMAND}`);
         
         if (status === 'Success') {
           console.log('获取结果成功，execute_id:', executeId);
@@ -81,13 +81,13 @@ const pollResult = async (executeId, maxAttempts = 25, interval = 50000) => {
         }
       }
     } catch (error) {
-      console.error('获取结果失败:', error);
+      console.error('获取结果失败:', error.response ? error.response.data : error.message);
       return { content: '获取结果失败，请重试', status: 'error' };
     }
-  }
+     
+     }
   return { content: '生成超时，请重试', status: 'error' };
 };
-
 export const getResult = async (executeId) => {
   try {
     const response = await axios.get(`${API_BASE_URL}/result/${executeId}`);
